@@ -21,10 +21,12 @@ func main() {
 				msg, op, err := wsutil.ReadClientData(conn)
 				if err != nil {
 					log.Printf("read error: %v", err)
+					break
 				}
 				err = wsutil.WriteServerMessage(conn, op, msg)
 				if err != nil {
 					log.Printf("write error: %v", err)
+					break
 				}
 			}
 		}()
