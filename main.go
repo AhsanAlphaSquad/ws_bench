@@ -21,7 +21,8 @@ func main() {
 		}
 	}()
 
-	err := http.ListenAndServe(":6969", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, _, _, err := ws.UpgradeHTTP(r, w)
 		if err != nil {
 			log.Printf("upgrade error: %v", err)
@@ -46,9 +47,44 @@ func main() {
 				}
 			}
 		}()
-	}))
+	})
+
+	mux.HandleFunc("/sse", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		// w.Header().Set("Transfer-Encoding", "chunked")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+			return
+		}
+
+		connections.Add(1)
+
+		notify := r.Context().Done()
+
+		for {
+			select {
+			case <-notify:
+				connections.Add(-1)
+				return
+			case <-time.After(1 * time.Second):
+				_, err := w.Write([]byte("data: hello\n\n"))
+				if err != nil {
+					log.Printf("write error: %v", err)
+					return
+				}
+				flusher.Flush()
+			}
+		}
+	})
+
+	err := http.ListenAndServe(":6969", mux)
 
 	if err != nil {
 		log.Fatal(err)
 	}
+
 }
